@@ -1,3 +1,41 @@
 spring:
   application:
     name: backend
+
+  # All values fall back to sensible local-dev defaults that match the
+  # docker-compose.yml / .env MySQL container, so `bootRun` works without any
+  # extra setup. Override by exporting DB_HOST / DB_PORT / DB_NAME /
+  # DB_USERNAME / DB_PASSWORD (e.g. to point at a different database).
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:gotgotneed}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:gotgotneed}
+    password: ${DB_PASSWORD:gotgotneed}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    open-in-view: false
+    show-sql: true
+    hibernate:
+      # update = Hibernate keeps the schema in sync with the entities automatically.
+      # Convenient for local development only; never use "update" (or "create"/
+      # "create-drop") against staging/production data.
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: UTC
+
+  # flyway-mysql / spring-boot-starter-flyway are already on the classpath for
+  # when the project moves to managed migrations, but there are no scripts
+  # under src/main/resources/db/migration yet. Flyway is disabled for now so
+  # it doesn't fight with Hibernate's ddl-auto above; flip this back to true
+  # once real migrations are added there.
+  flyway:
+    enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
