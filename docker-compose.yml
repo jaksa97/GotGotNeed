@@ -25,6 +25,43 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - gotgotneed-network
+
+  backend:
+    build:
+      # Build context is the repo root (not ./backend) because this is a
+      # single Gradle multi-module monorepo — see backend/Dockerfile's
+      # header comment for why the whole repo is needed to build :backend.
+      context: .
+      dockerfile: backend/Dockerfile
+    image: gotgotneed-backend:latest
+    container_name: gotgotneed-backend
+    restart: unless-stopped
+    environment:
+      # DB_HOST/DB_PORT describe the Compose network topology: the "mysql"
+      # service is always reachable by that name on its container-internal
+      # port 3306, regardless of what host port MYSQL_PORT maps it to. Only
+      # the credentials/database name come from .env, and must match the
+      # MYSQL_* values above (they seed the actual MySQL user/database).
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-gotgotneed}
+      DB_USERNAME: ${DB_USERNAME:-gotgotneed}
+      DB_PASSWORD: ${DB_PASSWORD:-gotgotneed}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      # Wait for MySQL to report "healthy" (accepting connections), not just
+      # "started" — otherwise the backend can race MySQL's own startup.
+      mysql:
+        condition: service_healthy
+    networks:
+      - gotgotneed-network
+
+networks:
+  gotgotneed-network:
+    name: gotgotneed-network
 
 volumes:
   gotgotneed-mysql-data:

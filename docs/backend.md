@@ -45,9 +45,11 @@ allOpen {
 
 ## How to run the backend
 
+**Option 1 — local Gradle (fastest inner loop):**
+
 ```bash
 # 1. Make sure MySQL is up (see database.md)
-docker compose up -d
+docker compose up -d mysql
 docker compose ps   # wait for "healthy"
 
 # 2. Run the backend
@@ -56,6 +58,18 @@ docker compose ps   # wait for "healthy"
 
 It starts an embedded Tomcat server on port `8080` by default (Spring
 Boot's standard default — not overridden in `application.yaml`).
+
+**Option 2 — fully containerized (backend + MySQL both in Docker):**
+
+```bash
+docker compose up --build
+```
+
+See the root [`README.md`](../README.md#running-backend-with-docker) for the
+full command reference, and [`backend/Dockerfile`](../backend/Dockerfile) for
+how the image is built. Compose is configured so the backend container only
+starts once MySQL's healthcheck passes (`depends_on: condition: service_healthy`
+in [`docker-compose.yml`](../docker-compose.yml)).
 
 Run the test suite:
 
@@ -74,10 +88,16 @@ Run the test suite:
   deployment environments diverge (e.g. different logging levels, a real
   production datasource, Flyway turned on), that's the natural next step
   using Spring profiles.
-- No `Dockerfile` exists for the backend yet — only the database is
-  containerized so far. The backend currently runs directly via Gradle
-  (`bootRun`) or as an executable jar (`./gradlew :backend:bootJar`, output
-  under `backend/build/libs/`).
+- [`backend/Dockerfile`](../backend/Dockerfile) — multi-stage build (Gradle
+  wrapper on a JDK 17 image to build the boot jar, then a minimal JRE 17
+  image to run it as a non-root user). Its build context is the **repo
+  root**, not `backend/`, because this is a single Gradle multi-module
+  monorepo and the wrapper needs `settings.gradle.kts` and every module's
+  `build.gradle.kts` to resolve the project graph, even though only
+  `:backend` actually gets compiled/packaged. See the file's header comment
+  for details. The backend can still run directly via Gradle (`bootRun`) or
+  as an executable jar (`./gradlew :backend:bootJar`, output under
+  `backend/build/libs/`) without Docker at all.
 
 ## Dependencies
 

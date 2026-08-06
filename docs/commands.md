@@ -51,20 +51,22 @@ built and run from Xcode against `iosApp/iosApp.xcodeproj`.
 ## Docker commands
 
 These operate on the `docker-compose.yml` at the repo root, which defines
-the `gotgotneed-mysql` service.
+the `gotgotneed-mysql` and `gotgotneed-backend` services.
 
 | Command | Purpose | When to use it |
 |---|---|---|
-| `docker compose up -d` | Starts (and creates, if needed) the MySQL container in the background. | Beginning of a work session, before running the backend. |
-| `docker compose ps` | Shows container status, including the health check state. | Confirming MySQL is up and `healthy` before starting the backend. |
-| `docker compose stop` | Stops the container without removing it (data volume untouched). | Pausing work without losing the container's config/state. |
-| `docker compose down` | Stops and removes the container (the named volume `gotgotneed-mysql-data` is kept). | End of a work session / freeing up resources, while keeping your data. |
-| `docker compose down -v` | Stops and removes the container **and** deletes the data volume. | You want a completely fresh database (e.g. to re-test init scripts under `docker/mysql/init/`). Destroys all local data. |
-| `docker compose up -d --build` | Rebuilds images (if any are custom-built) then starts. | After changing a custom Dockerfile — not currently used here since `mysql:8.4` is a stock image, but kept for future services. |
+| `docker compose up -d mysql` | Starts (and creates, if needed) just the MySQL container in the background. | Beginning of a work session when running the backend locally via `./gradlew :backend:bootRun`. |
+| `docker compose up --build` | Builds the backend image (if needed) and starts **both** MySQL and the backend, in the correct order (MySQL healthy → backend starts). | Running the fully containerized stack — see [`database.md`](./database.md#startup-order-docker-compose). |
+| `docker compose up --build -d` | Same as above, detached. | Same as above, without tying up a terminal. |
+| `docker compose ps` | Shows container status, including the health check state. | Confirming MySQL/backend are up and `healthy`. |
+| `docker compose stop` | Stops the containers without removing them (data volume untouched). | Pausing work without losing config/state. |
+| `docker compose down` | Stops and removes the containers (the named volume `gotgotneed-mysql-data` is kept). | End of a work session / freeing up resources, while keeping your data. |
+| `docker compose down -v` | Stops and removes the containers **and** deletes the data volume. | You want a completely fresh database (e.g. to re-test init scripts under `docker/mysql/init/`). Destroys all local data. |
 | `docker compose logs -f mysql` | Streams the MySQL container's logs. | Diagnosing startup failures or query issues. |
+| `docker compose logs -f backend` | Streams the backend container's logs. | Diagnosing backend startup or DB-connection failures. |
 | `docker compose exec mysql bash` | Opens a shell inside the running MySQL container. | Poking around the container's filesystem/config. |
 | `docker exec -it gotgotneed-mysql mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE` | Opens a MySQL shell inside the container using the app credentials. | Quickest way to inspect/query the database from the terminal (see MySQL commands below). |
-| `docker ps` | Lists all running containers (not just this project's). | Checking whether `gotgotneed-mysql` (or anything else) is already running. |
+| `docker ps` | Lists all running containers (not just this project's). | Checking whether `gotgotneed-mysql`/`gotgotneed-backend` (or anything else) is already running. |
 
 ## MySQL commands
 

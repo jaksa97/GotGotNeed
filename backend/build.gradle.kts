@@ -33,6 +33,7 @@ dependencies {
 	testImplementation(libs.spring.boot.starterWebmvcTest)
 	testImplementation(libs.kotlin.testJunit5)
 	testRuntimeOnly(libs.junit.platformLauncher)
+	implementation(libs.springdoc.openapi)
 }
 
 kotlin {

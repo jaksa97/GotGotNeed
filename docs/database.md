@@ -1,7 +1,10 @@
 # Database
 
 Local development uses **MySQL 8.4** running in Docker, wired up via
-[`docker-compose.yml`](../docker-compose.yml) at the repo root.
+[`docker-compose.yml`](../docker-compose.yml) at the repo root. That same
+file also defines a `backend` service (see [`backend.md`](./backend.md) and
+[`backend/Dockerfile`](../backend/Dockerfile)) that only starts once MySQL
+reports healthy — see "Startup order" below.
 
 ## MySQL Docker setup
 
@@ -33,6 +36,30 @@ services:
   brand-new (empty) volume — see that directory's `README.md` for details.
   This is for optional seed/bootstrap data, not schema migrations.
 
+## Startup order (Docker Compose)
+
+When running `docker compose up --build`, the `backend` service declares:
+
+```yaml
+depends_on:
+  mysql:
+    condition: service_healthy
+```
+
+This means Compose brings the containers up in this order:
+
+1. `mysql` container starts.
+2. Compose polls the `mysqladmin ping` healthcheck above until it reports
+   `healthy` (i.e. MySQL is actually accepting connections, not just that
+   the process has started).
+3. Only then does the `backend` container start and connect, using
+   `jdbc:mysql://mysql:3306/...` (the `mysql` hostname resolves via the
+   `gotgotneed-network` Docker network shared by both services).
+
+This avoids the classic "backend crash-loops because MySQL was still
+initializing" race condition that a plain `depends_on: [mysql]` (order-only,
+no health condition) would not protect against.
+
 ## Database name and credentials
 
 Everything is parameterized via environment variables, read from a
@@ -46,17 +73,21 @@ template that's actually committed):
 | `MYSQL_PASSWORD` | `gotgotneed` | Compose — that user's password. |
 | `MYSQL_ROOT_PASSWORD` | `gotgotneed` | Compose — root password, for administrative access only. |
 | `MYSQL_PORT` | `3306` | Compose — host port mapped to the container's `3306`. |
-| `DB_HOST` | `localhost` | Backend (`application.yaml`) — MySQL host as seen from wherever the backend runs. |
-| `DB_PORT` | `3306` | Backend — MySQL port. |
-| `DB_NAME` | `gotgotneed` | Backend — database to connect to. |
-| `DB_USERNAME` | `gotgotneed` | Backend — connection user. |
-| `DB_PASSWORD` | `gotgotneed` | Backend — connection password. |
+| `BACKEND_PORT` | `8080` | Compose — host port mapped to the backend container's `8080`. |
+| `DB_HOST` | `localhost` | Backend (`application.yaml`) — MySQL host when running `bootRun` on the host. **Not used** when the backend itself runs in Compose — there it's hardcoded to `mysql` directly in `docker-compose.yml`, since `localhost` inside the backend container would mean the backend container itself. |
+| `DB_PORT` | `3306` | Backend — MySQL port for `bootRun`. Compose hardcodes this to the container-internal `3306` for the same reason as `DB_HOST` above (unaffected by a customized `MYSQL_PORT` host mapping). |
+| `DB_NAME` | `gotgotneed` | Backend — database to connect to. Must match `MYSQL_DATABASE`. |
+| `DB_USERNAME` | `gotgotneed` | Backend — connection user. Must match `MYSQL_USER`. |
+| `DB_PASSWORD` | `gotgotneed` | Backend — connection password. Must match `MYSQL_PASSWORD`. |
 
 These defaults are intentionally identical to each other so that running
 `docker compose up -d` followed by `./gradlew :backend:bootRun` works with
 **zero configuration** — no need to export anything unless you want to
 point the backend at something other than the local container (a different
-host, port, or a shared dev database).
+host, port, or a shared dev database). The same defaults also mean
+`docker compose up --build` (backend + MySQL both containerized) works out
+of the box, since `DB_NAME`/`DB_USERNAME`/`DB_PASSWORD` already match
+`MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD`.
 
 > These are local development defaults, not secrets — but `.env` is
 > git-ignored regardless, and only `.env.example` (no real credentials, just
@@ -122,6 +153,37 @@ logging:
   generally-recommended default for REST APIs and forces data access to
   happen deliberately in the service layer rather than lazily during
   serialization.
+
+## Verifying the backend connected to MySQL
+
+After `docker compose up --build`:
+
+```bash
+docker compose ps
+# both gotgotneed-mysql and gotgotneed-backend should show "healthy"
+
+docker compose logs backend
+# look for HikariCP connecting successfully, e.g.:
+#   HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@...
+#   HikariPool-1 - Start completed.
+#   Database JDBC URL [jdbc:mysql://mysql:3306/gotgotneed?...]
+#   Started BackendApplicationKt in ... seconds
+```
+
+Since `spring.jpa.hibernate.ddl-auto: update` requires a live database
+connection to run at startup, a failed DB connection means the Spring
+context fails to start and the container exits — so a **running, healthy**
+`gotgotneed-backend` container is itself strong evidence the connection
+worked. For an explicit HTTP-level check (no extra dependencies needed —
+`spring-boot-starter-actuator` isn't currently on the classpath):
+
+```bash
+curl -i http://localhost:8080/api-docs      # or ${BACKEND_PORT} if customized
+curl -i http://localhost:8080/swagger-ui/index.html
+```
+
+A `200 OK` from either confirms the Spring context (and therefore the
+datasource) initialized successfully.
 
 ## Future migration strategy
 

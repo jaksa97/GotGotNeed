@@ -30,6 +30,48 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
   - Run it: `./gradlew :backend:bootRun`
   - Test it: `./gradlew :backend:test`
 
+## Running backend with Docker
+
+The backend can also run fully containerized, alongside MySQL, via
+[`docker-compose.yml`](./docker-compose.yml). Compose starts MySQL first, waits
+until it reports **healthy** (accepts connections), and only then starts the
+backend container — see [`backend/Dockerfile`](./backend/Dockerfile) and
+[`docs/database.md`](./docs/database.md) for details.
+
+```bash
+# 1. Copy the environment template once (git-ignored; safe to edit locally)
+cp .env.example .env
+
+# 2. Build the backend image and start both containers
+docker compose up --build
+
+# Or in the background:
+docker compose up --build -d
+```
+
+Other useful commands:
+
+```bash
+# Stop and remove the containers (the MySQL data volume is kept)
+docker compose down
+
+# Follow just the backend's logs
+docker compose logs -f backend
+
+# Check container status/health
+docker compose ps
+```
+
+**Accessing the backend** once it's up:
+
+- API base URL: `http://localhost:8080` (or `${BACKEND_PORT}` from `.env` if customized)
+- Swagger UI: `http://localhost:8080/swagger-ui`
+- OpenAPI docs: `http://localhost:8080/api-docs`
+
+This is independent from local development: `./gradlew :backend:bootRun` still
+works exactly as before (see above) — Docker is only needed if you specifically
+want the backend running in a container.
+
 ---
 
 Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html),
